@@ -34,6 +34,11 @@ or           "||"
 not          "!"
 comment      "#"[^\n]*
 
+
+/* va_arg {
+	return tk_va_arg;
+} */
+
 /* rules */
 %%
 
@@ -55,10 +60,6 @@ write {
 
 read {
 	return tk_read;
-}
-
-va_arg {
-	return tk_va_arg;
 }
 
 while {

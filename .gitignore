@@ -5,3 +5,5 @@ proj-part*
 part3_lex.cpp
 *.tab*
 rx-runtime.rsk
+*.rsk
+rx-cc

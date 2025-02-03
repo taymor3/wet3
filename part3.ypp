@@ -36,7 +36,7 @@
 	%%
 
 	PROGRAM : FDEFS {
- 		buffer->emit("parse start");
+ 		buffer->emit("HALT");
 		// backpatch all the holes of JLINK	
 		for(map<string, Function>::iterator it = functionTable.begin();
 			it != functionTable.end(); it++) {
@@ -82,7 +82,7 @@
 	;
 
 	BLK_CLOSE : {
-		
+		buffer->emit("block close");
 		// delete vars in current scope when leaving it
 		for(std::map<string, Symbol>::iterator it = symbolTable.begin(); it != symbolTable.end(); ++it){
 			if (it->second.depth == curBlockDepth) {
@@ -256,6 +256,7 @@ int main(int argc, char* argv[])
 		printOperationalError("cannot open input file");
 	}
 
+	Buffer headerBuffer;
 	buffer = &headerBuffer;
 
     yyparse();

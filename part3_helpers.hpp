@@ -142,7 +142,6 @@ class Buffer {
 
 /*******************************************GLOBALS*******************************************/
 static Buffer* buffer;                          // CodeGen buffer
-static Buffer headerBuffer;                     // HeaderGen buffer
 static map<string, Symbol> symbolTable;			// Table that contains all symbols defined in prog
 static map<string, Function> functionTable;		// Table that contains all functions - each function with it's members
 static int curBlockDepth = 0;
