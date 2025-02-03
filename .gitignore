@@ -2,7 +2,6 @@ examples
 part2
 proj-part*
 *.o
-rx*
 part3_lex.cpp
 *.tab*
-*.rsk
+rx-runtime.rsk

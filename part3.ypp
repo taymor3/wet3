@@ -36,8 +36,14 @@
 	%%
 
 	PROGRAM : FDEFS {
- 				buffer->emit("program start");	
-			} ;
+ 		buffer->emit("parse start");
+		// backpatch all the holes of JLINK	
+		for(map<string, Function>::iterator it = functionTable.begin();
+			it != functionTable.end(); it++) {
+			buffer->backpatch(it->second.callingLines, 
+				it->second.startLineImplementation);
+		}
+	} ;
 
 	FDEFS : FDEFS FUNC_DEF_API BLK {
 			}
@@ -66,8 +72,29 @@
 			} ;
 
 
-	BLK :   '{' STLIST '}' {
+	BLK :   '{' BLK_OPEN STLIST M BLK_CLOSE '}' {
 			} ;
+
+	BLK_OPEN : {
+		// open new block
+		curBlockDepth++;
+	}
+	;
+
+	BLK_CLOSE : {
+		
+		// delete vars in current scope when leaving it
+		for(std::map<string, Symbol>::iterator it = symbolTable.begin(); it != symbolTable.end(); ++it){
+			if (it->second.depth == curBlockDepth) {
+				it->second.type.erase(curBlockDepth);
+				it->second.offset.erase(curBlockDepth);
+				it->second.depth--;
+			}
+		}
+		
+		// close the block
+		curBlockDepth--;
+	}
 
 	DCL :   tk_id ':' TYPE {
 			}
@@ -148,6 +175,7 @@
 			| EXP tk_mulop EXP {
 			}
 			| '(' EXP ')' {
+				$$ = $2
 			}
 			| '(' TYPE ')' EXP {
 			}
@@ -172,17 +200,41 @@
 			} ;
 
 	CALL_ARGS : CALL_ARGLIST {
-			}
-			| /* e */ {
-			} ;
+		$$.paramTypes = $1.paramTypes;	
+		$$.paramRegs = $1.paramRegs;
+		$1.paramTypes.clear();
+		$1.paramRegs.clear();
+	}
+	| /* e */ {
+	} ;
 
 
 	CALL_ARGLIST : CALL_ARGLIST ',' EXP {
+				$$.paramRegs = $1.paramRegs;
+				$$.paramTypes = $1.paramTypes;
+				$$.paramRegs.push_back($3.RegNum);
+				$$.paramTypes.push_back($3.type);
+				$1.paramTypes.clear();
+				$1.paramRegs.clear();
 			}
 			|  EXP {
+				$$.paramTypes.push_back($1.type);
+				$$.paramRegs.push_back($1.RegNum);
 			} ;
 
+	// markers
+	M : {
+		$$.quad = buffer->nextQuad();
+	}
+	;
+ 
+	N : {
+		$$.nextList.push_back(buffer->nextquad());
+		buffer->emit("UJUMP ");
+	}
+	;
 	%%
+
 
 
 int main(int argc, char* argv[])
