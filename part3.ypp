@@ -175,7 +175,7 @@
 			| EXP tk_mulop EXP {
 			}
 			| '(' EXP ')' {
-				$$ = $2
+				$$ = $2;
 			}
 			| '(' TYPE ')' EXP {
 			}
