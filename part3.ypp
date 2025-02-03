@@ -1,0 +1,264 @@
+%{
+    #include "part3_helpers.hpp"
+
+	using namespace std;
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+
+	extern char* yytext;
+	extern int yylineno;
+	extern "C" int yylex();
+	extern void yylex_destroy();
+
+	void printOperationalError (string err);
+	void printSemanticError(string err);
+	void yyerror(const char* c);
+
+	%}
+
+    %token tk_id
+    %token tk_integernum tk_realnum
+	%token tk_str
+    %token tk_ellipsis
+    %token tk_int tk_float
+	%token tk_void tk_write tk_read 
+    %token tk_while tk_do tk_return
+    %token tk_va_arg
+
+    %left tk_relop tk_addop tk_mulop
+	%right tk_assign tk_not
+	%right tk_if tk_then tk_else
+    
+	%left '(' ')' '{' '}' ':' ';'
+    %left tk_or tk_and
+
+	%%
+
+	PROGRAM : FDEFS {
+ 				buffer->emit("program start");	
+			} ;
+
+	FDEFS : FDEFS FUNC_DEF_API BLK {
+			}
+			| FDEFS FUNC_DEC_API {
+			}
+			| /* e */ {
+            } ;
+
+	FUNC_DEC_API : TYPE tk_id '(' ')' ';' {
+			}
+            | TYPE tk_id '(' FUNC_ARGLIST ')' ';' {
+			}
+            | TYPE tk_id '(' FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
+			} ;
+    
+    FUNC_DEF_API : TYPE tk_id '(' ')' {
+			}
+            | TYPE tk_id '(' FUNC_ARGLIST ')' {
+			}
+            | TYPE tk_id '(' FUNC_ARGLIST ',' tk_ellipsis ')' {
+			} ;
+
+	FUNC_ARGLIST : FUNC_ARGLIST ',' DCL {
+			}
+			| DCL {
+			} ;
+
+
+	BLK :   '{' STLIST '}' {
+			} ;
+
+	DCL :   tk_id ':' TYPE {
+			}
+			| tk_id ',' DCL {
+			} ;
+
+	TYPE :  tk_int {
+			}
+            | tk_float
+			{
+			}
+            | tk_void {
+			} ;
+
+	STLIST :STLIST STMT {
+			}
+			| /* e */ {
+			} ;
+
+	STMT :  DCL ';' {
+			}
+			| ASSN {
+			}
+			| EXP ';' {
+			}
+			| CNTRL {
+			}
+			| READ {
+			}
+			| WRITE {
+			} 
+			| RETURN {
+			}
+			| BLK {
+			} ;
+
+	RETURN :tk_return EXP ';' {
+			}
+			| tk_return ';' {
+			} ;
+
+	WRITE : tk_write '(' EXP ')' ';' {
+			}
+			| tk_write '(' tk_str ')' ';' {
+			} ;
+
+	READ :  tk_read '(' LVAL ')' ';'	{
+			} ;
+
+
+	ASSN :  LVAL tk_assign EXP ';' {
+			} ;
+
+	LVAL :  tk_id {
+			} ;
+
+	CNTRL : tk_if BEXP tk_then STMT tk_else STMT {
+			}
+			| tk_if BEXP tk_then STMT {
+			}
+			| tk_while BEXP tk_do STMT {
+			} ;
+
+	BEXP :  BEXP tk_or BEXP {
+			}
+			| BEXP tk_and BEXP {
+			}
+			| tk_not BEXP {
+			}
+			| EXP tk_relop EXP {
+			}
+			| '(' BEXP ')' {
+            } ;
+
+
+	EXP :   EXP tk_addop EXP {
+			}
+			| EXP tk_mulop EXP {
+			}
+			| '(' EXP ')' {
+			}
+			| '(' TYPE ')' EXP {
+			}
+			| tk_id {
+			}
+			| NUM {
+			}
+			| CALL {
+			}
+            | VA_MATERIALISE {
+            } ;
+
+    NUM :   tk_integernum {
+			}
+            | tk_realnum {
+            } ;
+
+	CALL : tk_id '(' CALL_ARGS ')' {
+			} ;
+
+    VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')' {
+			} ;
+
+	CALL_ARGS : CALL_ARGLIST {
+			}
+			| /* e */ {
+			} ;
+
+
+	CALL_ARGLIST : CALL_ARGLIST ',' EXP {
+			}
+			|  EXP {
+			} ;
+
+	%%
+
+
+int main(int argc, char* argv[])
+{
+	cout << "start compiling" << endl;
+	if (argc != 2) {
+		printOperationalError("invalid number of arguments");
+	}
+
+	string input_file = argv[1];
+	size_t last_dot = input_file.find_last_of(".");
+    if (input_file.substr(last_dot) != ".cmm") {
+		printOperationalError("invalid file type. expecting '.cmm' extension");
+	}
+
+	extern FILE *yyin;
+	yyin = fopen(argv[1], "r");
+	if (yyin == NULL) {
+		printOperationalError("cannot open input file");
+	}
+
+	buffer = &headerBuffer;
+
+    yyparse();
+
+	// add header data
+	headerBuffer.frontEmit("</header>");
+	string imp_funcs = "<implemented>";
+	string un_imp_funcs = "<unimplemented>";
+
+	for(map<string, Function>::iterator it = functionTable.begin(); it != functionTable.end(); it++) {
+		if (it->second.isDefined > 0) {
+			imp_funcs += " " + it->first + "," 
+					  + intToString(it->second.startLineImplementation);
+		}
+		else {
+			un_imp_funcs += " " + it->first;
+			for (int i = 0; i < it->second.callingLines.size(); i++) {
+				un_imp_funcs += "," + 
+							 intToString(it->second.callingLines[i]);
+			}
+		}
+	}
+
+	headerBuffer.frontEmit(imp_funcs);
+	headerBuffer.frontEmit(un_imp_funcs);
+	headerBuffer.frontEmit("<header>");
+
+	ofstream output_rsk;
+	string outputName = input_file.substr(0, last_dot) + ".rsk";
+	// need both / and \ for linux/windows
+	size_t last_name_in_path = outputName.find_last_of("/\\");
+	outputName = outputName.substr(last_name_in_path+1);
+
+	output_rsk.open(outputName.c_str());
+	
+	// the buffer contains the code gen already
+	output_rsk << headerBuffer.printBuffer();
+	output_rsk.close();
+
+	yylex_destroy();
+	cout << "stop compiling" << endl;
+	return 0;
+}
+
+void printOperationalError (string err) {
+	cerr << "Operational error: " << err << endl;
+	exit(OPERATIONAL_ERROR);
+}
+
+void printSemanticError (string err) {
+	cerr << "Semantic error: " << err << " in line number " << yylineno << endl;
+	exit(SEMANTIC_ERROR);
+}
+
+void yyerror(char const* s) {
+	cerr << "Syntax error: '" << yytext << "' in line number " << yylineno << endl;
+	exit(SYNTAX_ERROR);
+}
