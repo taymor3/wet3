@@ -7,3 +7,4 @@ part3_lex.cpp
 rx-runtime.rsk
 *.rsk
 rx-cc
+*.e
