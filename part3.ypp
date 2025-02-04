@@ -215,13 +215,13 @@
 		} ;
 
 	TYPE :  tk_int {
-				$$.type = int_
+				$$.type = int_;
 			}
             | tk_float {
-				$$.type = float_
+				$$.type = float_;
 			}
             | tk_void {
-				$$.type = void_t
+				$$.type = void_t;
 			} ;
 
 	STLIST :STLIST STMT { }
@@ -364,6 +364,61 @@
 				$$.falseList = $2.trueList;
 			}
 			| EXP tk_relop EXP {
+				int leftReg = $1.RegNum;
+				int rightReg = $3.RegNum;
+				if ($1.type != $3.type) {
+					printSemanticError("RELOP ops require same type arguments");
+				}
+				if ($1.type == void_t) {
+					printSemanticError("can't perform RELOP ops on void_t");
+				}
+				string type;
+				if ($1.type == int_) {
+					type = "I";
+					$$.RegNum = curScopeIntRegsNum++;
+				} else {
+					type = "F";
+					$$.RegNum = curScopeFloatRegsNum++;
+				}
+
+				// alocate quad for UJUMP
+				$$.falseList.push_back(buffer->nextQuad() + 1);
+				// alocate quad for BNEQZ 
+				$$.trueList.push_back(buffer->nextQuad() + 2);
+
+				if ($2.name == "==") {
+					buffer->emit("SEQU" + type + " " + type + intToString($$.RegNum) + " " 
+					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
+					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+				} 
+				else if ($2.name == "<>") {
+					buffer->emit("SNEQ" + type + " " + type + intToString($$.RegNum) + " " 
+					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
+					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+				} 
+				else if ($2.name == ">=") {
+					buffer->emit("SLET" + type + " " + type + intToString($$.RegNum) + " " 
+					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
+					buffer->emit("BNEQZ " + type + intToString($$.RegNum) + " ");
+				}
+				else if ($2.name == ">") {
+					buffer->emit("SGRT" + type + " " + type + intToString($$.RegNum) + " " 
+					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
+					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+				} 
+				else if ($2.name == "<=") {
+					buffer->emit("SGRT" + type + " " + type + intToString($$.RegNum) + " " 
+					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
+					buffer->emit("BNEQZ " + type + intToString($$.RegNum) + " ");
+				}
+				else if ($2.name == "<") {
+					buffer->emit("SLET" + type + " " + type + intToString($$.RegNum) + " " 
+					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
+					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+				}
+
+				buffer->emit("UJUMP ");
+				
 			}
 			| '(' BEXP ')' {
 				$$.trueList = $2.trueList;
