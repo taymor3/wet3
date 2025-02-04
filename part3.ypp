@@ -584,7 +584,7 @@
 				$$.RegNum = curScopeFloatRegsNum++;
 				$$.type = $2.type;
 				$$.offset = $4.offset;
-				buffer->emit("CFTOI F" + intToString($$.RegNum) + " I" + intToString($4.RegNum));
+				buffer->emit("CITOF F" + intToString($$.RegNum) + " I" + intToString($4.RegNum));
 			}
 		}
 		| tk_id { // check here again
