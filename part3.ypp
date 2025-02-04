@@ -45,7 +45,7 @@
 		}
 	} ;
 
-	FDEFS : FDEFS FUNC_DEF_API BLK M { // function definition
+	FDEFS : FDEFS FUNC_DEF_API BLK { // function definition
 		// check if function is already defined
 		if(functionTable[$2.name].isDefined != false) {
 			printSemanticError("redefinition of function " + $2.name);
@@ -95,6 +95,7 @@
 			Function new_func;
 			new_func.returnType = $1.type;
 			new_func.startLineImplementation = $4.quad;
+			new_func.isDefined = false;
 
 			// insert into function table
 			functionTable.insert(std::pair<string,Function>($2.name, new_func));
@@ -611,13 +612,13 @@
 		int offset = 0;
 
 		for (int i = 0; i < curScopeIntRegsNum; ++i) {
-			buffer->emit("STORI" + intToString(i) + " I2 " + intToString(offset));
+			buffer->emit("STORI I" + intToString(i) + " I2 " + intToString(offset));
 			offset += 4;
 		}
 
 		buffer->emit("CITOF F2 I2");
 		for (int i = 0; i < curScopeFloatRegsNum; ++i) {
-			buffer->emit("STORF" + intToString(i) + " F2 " + intToString(offset));
+			buffer->emit("STORF F" + intToString(i) + " F2 " + intToString(offset));
 			offset += 4;
 		}
 
