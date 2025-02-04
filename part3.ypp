@@ -14,7 +14,7 @@
 	void printOperationalError (string err);
 	void printSemanticError(string err);
 	void yyerror(const char* c);
-	void printString(string s);
+	void printRuntimeString(string s);
 
 	%}
 
@@ -59,7 +59,7 @@
 		curScopeIntRegsNum = 3;
 		curScopeFloatRegsNum = 3;
 		curScopeOffset = 0;
-		symbolTable.clear(); // ???
+		symbolTable.clear();
 		$2.paramTypes.clear();
 	}
 	| FDEFS FUNC_DEC_API { // function declaration
@@ -67,24 +67,28 @@
 		if (functionTable[$2.name].isDefined != true) {
 			functionTable[$2.name].startLineImplementation = -1;
 		}
-		symbolTable.clear(); // ???
+		symbolTable.clear();
 	}
 	| /* e */ {
     } ;
 
 	FUNC_DEC_API : TYPE tk_id '(' ')' ';' {
-			}
-            | TYPE tk_id '(' M FUNC_ARGLIST ')' ';' {
-			}
-            | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
-			} ;
+		cout << "type id (); " << $2.name << endl;
+	}
+    | TYPE tk_id '(' M FUNC_ARGLIST ')' ';' {
+		cout << "type id ( args ); " << $2.name << endl;
+	}
+	| TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
+	} ;
     
     FUNC_DEF_API : TYPE tk_id '(' ')' {
-			}
-            | TYPE tk_id '(' M FUNC_ARGLIST ')' {
-			}
-            | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' {
-			} ;
+		cout << "type id () " << $2.name << endl;
+	}
+	| TYPE tk_id '(' M FUNC_ARGLIST ')' {
+		cout << "type id ( args ) " << $2.name << endl;
+	}
+    | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' {
+	} ;
 
 	FUNC_ARGLIST : FUNC_ARGLIST ',' DCL {
 				// insert function params to the global list in the reverse order
@@ -276,25 +280,7 @@
 			}
 			| tk_write '(' tk_str ')' ';' {
 				cout << $3.name << endl;
-				printString($3.name);
-				// for (unsigned int i = 0 ; i < $3.name.length() ; i++) {
-				// 	char c = $3.name[i];
-				// 	if (c == '\\') {
-				// 		if ($3.name[i+1] == 'n') {
-				// 			c = '\n';
-				// 			i++;
-				// 		}
-				// 		else if ($3.name[i+1] == 't') {
-				// 			c = '\t';
-				// 			i++;
-				// 		} else if ($3.name[i+1] == '"') {
-				// 			c = '"';
-				// 			i++;
-				// 		}
-				// 	}
-				// 	int val = static_cast<int>(c);
-				// 	buffer->emit("PRNTC " + intToString(val));
-				// }
+				printRuntimeString($3.name);
 			} ;
 
 	READ : tk_read '(' LVAL ')' ';'	{
@@ -603,19 +589,81 @@
 		// save function registers to memory
 		int offset = 0;
 
-		// for (int i = 0; i < curScopeIntRegsNum; ++i) {
-		// 	buffer->emit("STI32 I" + intToString(i) + " I2 " + intToString(offset));
-		// 	offset += 4;
-		// }
-		// for (int i = 0; i < curScopeFloatRegsNum; ++i) {
-		// 	buffer->emit("STI32 I" + intToString(i) + " I2 " + intToString(offset));
-		// 	offset += 4;
-		// }
+		for (int i = 0; i < curScopeIntRegsNum; ++i) {
+			buffer->emit("STORI" + intToString(i) + " I2 " + intToString(offset));
+			offset += 4;
+		}
 
-		// ############################################################
+		buffer->emit("CITOF F2 I2");
+		for (int i = 0; i < curScopeFloatRegsNum; ++i) {
+			buffer->emit("STORF" + intToString(i) + " F2 " + intToString(offset));
+			offset += 4;
+		}
 
 		// 4 bytes for return value
 		offset += 4;
+
+		int paramsCurOffset = -4;
+		int paramCount = $3.paramRegs.size();
+		vector<Type> paramTypes = $3.paramTypes;
+		vector<int> paramRegs = $3.paramRegs;
+		vector<int> paramOffset;
+
+		$3.paramRegs.clear();
+		$3.paramTypes.clear();
+
+		for (int i = 0; i < paramCount; i++) {
+			offset += 4;
+			paramsCurOffset -=4;
+			paramOffset.push_back(paramsCurOffset);
+		}
+
+		// update I2(stack pointer) to the current memory size
+		buffer->emit("ADD2I I2 I2 " + intToString(offset));
+		// update new scope offset
+		curScopeOffset += offset;
+		// frame p = stack p
+		buffer->emit("COPYI I1 I2");
+		buffer->emit("CITOF F1 I1");
+		//store calling function params
+		string type;
+		for (int i = 0; i < paramCount; i++) {
+			type = (paramTypes[i] == float_) ? "F" : "I";
+			buffer->emit("STOR" + type + " " + type + intToString(paramRegs[i]) 
+					+ " " + type +"1 " + intToString(paramOffset[i]));
+		}
+
+		// add line to calling lines list of this func
+		functionTable[func_name].callingLines.push_back(buffer->nextQuad());
+
+		buffer->emit("JLINK "); 
+		// when returning from call, set the stack frame I2 = I1
+		buffer->emit("COPYI I2 I1");
+
+		// save return value to reg
+		$$.type = functionTable[func_name].returnType;
+		if ($$.type == float_) {
+			$$.RegNum = curScopeFloatRegsNum;
+		} else { // int
+			$$.RegNum = curScopeIntRegsNum;
+		}
+		
+		// load return value to memory
+		if ($$.type != void_t) {
+			if($$.type == float_) {
+				buffer->emit("CITOF F1 I1");
+				buffer->emit("LOADF F" + intToString($$.RegNum) + " F1 -4");
+			} else { // int
+				buffer->emit("LOADI I" + intToString($$.RegNum) + " I1 -4");
+			}
+		}
+
+		if ($$.type == float_) {
+			curScopeFloatRegsNum++;
+		} else { // int
+			curScopeIntRegsNum++;
+		}
+		
 	} ;
 
     VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')' {
@@ -738,7 +786,7 @@ void yyerror(char const* s) {
 	exit(SYNTAX_ERROR);
 }
 
-void printString(string s) {
+void printRuntimeString(string s) {
 	for (unsigned int i = 0 ; i < s.length() ; i++) {
 		char c = s[i];
 		if (c == '\\') {
