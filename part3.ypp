@@ -295,30 +295,66 @@
 		}
 			} ;
 
-	READ :  tk_read '(' LVAL ')' ';'	{
-			} ;
+	READ : tk_read '(' LVAL ')' ';'	{
+		if ($3.type == void_t) {
+			printSemanticError("can't read into void_t");
+		}
+
+		string type;
+		int temp_reg;
+		if ($3.type == float_) {
+			type = "F";
+			temp_reg = curScopeFloatRegsNum++;
+		} else { // int
+			type = "I";
+			temp_reg = curScopeIntRegsNum++;
+		}
+
+		buffer->emit("READ" + type + " " + type + intToString(temp_reg));
+		buffer->emit("STOR" + type + " " + type + intToString(temp_reg) 
+				+ " " + type + intToString($3.RegNum) + " 0");
+	} ;
 
 
 	ASSN :  LVAL tk_assign EXP ';' {
-			} ;
+		if ($1.type != $3.type) {
+			printSemanticError("mismatched types between " + $1.name + " and " + $3.name);
+		}
+		if ($1.type == void_t) {
+			printSemanticError("can't assign to/from void");
+		}
+		string type = ($1.type == float_) ? "F" : "I";
+		buffer->emit("STOR" + type + " " + type + intToString($3.RegNum) + 
+		" " + type + intToString($1.RegNum) + " 0");
 
-	LVAL :  tk_id { // needs to be done still
-		// check if variable exists
+	} ;
+
+	LVAL : tk_id { // needs to be done still
+		cout << "LVAL name: " << $1.name << endl;
+		// check if symbol exists
 		if (symbolTable.find($1.name) == symbolTable.end()) {
-			printSemanticError("use of undeclared identifier '" + $1.name + "'");
+			printSemanticError("use of undeclared symbol " + $1.name);
 		}
 		int depth = symbolTable[$1.name].depth;
 		$$.type = symbolTable[$1.name].type[depth];
+		$$.offset = symbolTable[$1.name].offset[depth];
 		
 		if ($$.type == void_t) {
-			printSemanticError("variable '" + $1.name + "' has incompatible type (void)");
+			printSemanticError("symbol " + $1.name + " has incompatible type (void)");
 		}
 
-		// Allocate a register for the memory offset calulation
-		// dont know why this is here ********
-		// $$.RegNum = curScopeRegsNum++; 
-		$$.offset = symbolTable[$1.name].offset[depth];
-		buffer->emit("ADD2I I" + intToString($$.RegNum) + " I1 " + intToString($$.offset));
+		string type;
+		if ($$.type == float_) {
+			type = "F";
+			$$.RegNum = curScopeFloatRegsNum++;
+			buffer->emit("CITOF F1 I1");
+		} else { // int
+			type = "I";
+			$$.RegNum = curScopeIntRegsNum++;
+		}
+		 
+		buffer->emit("ADD2" + type + " " + type + intToString($$.RegNum) + " " 
+					 + type + "1 " + intToString($$.offset));
 	} ;
 
 	CNTRL : tk_if BEXP tk_then M STMT tk_else N M STMT {
