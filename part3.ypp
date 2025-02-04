@@ -89,7 +89,7 @@
 
 		if (functionTable.find($2.name) != functionTable.end()) { 
 			if ($1.type != functionTable[$2.name].returnType) {
-				printSemanticError("conflicting return type for " + $2.name);
+				printSemanticError("wrong return type for " + $2.name);
 			}
 			// if already in table, just set implementation line
 			functionTable[$2.name].startLineImplementation = $4.quad;
@@ -115,31 +115,6 @@
 			printSemanticError("wrong return type for function main");
 		}
 
-		if (functionTable.find($2.name) != functionTable.end()) { 
-			if ($1.type != functionTable[$2.name].returnType) {
-				printSemanticError("conflicting return type for " + $2.name);
-			}
-			// if already in table, just set implementation line
-			functionTable[$2.name].startLineImplementation = $4.quad;
-		} else {
-			// else, insert to function table
-			Function new_func;
-			new_func.returnType = $1.type;
-			new_func.startLineImplementation = $4.quad;
-			new_func.paramTypes = $5.paramTypes;
-			new_func.isDefined = false;
-
-			// insert into function table
-			functionTable.insert(std::pair<string,Function>($2.name, new_func));
-		}
-
-		curRetType = $1.type;
-		$$.name = $2.name;
-		$$.type = $1.type;
-		$$.quad = $4.quad;
-		$$.paramTypes = $5.paramTypes;
-		$5.paramTypes.clear();
-		
 		// calculate param offsets from I1 in reverse
 		// save 4 bytes for function return val
 		int offset = -4;
@@ -156,6 +131,32 @@
 		$$.paramTypes = paramTypes;
 		curParamInsertOrder.clear();
 		curScopeOffset = curScopeOffset + offset + 4;
+
+		if (functionTable.find($2.name) != functionTable.end()) { 
+			if ($1.type != functionTable[$2.name].returnType) {
+				printSemanticError("wrong return type for " + $2.name);
+			}
+			// if already in table, just set implementation line
+			functionTable[$2.name].startLineImplementation = $4.quad;
+		} else {
+			// else, insert to function table
+			Function new_func;
+			new_func.returnType = $1.type;
+			new_func.startLineImplementation = $4.quad;
+			new_func.paramTypes = paramTypes;
+			new_func.isDefined = false;
+
+			// insert into function table
+			functionTable.insert(std::pair<string,Function>($2.name, new_func));
+		}
+
+		curRetType = $1.type;
+		$$.name = $2.name;
+		$$.type = $1.type;
+		$$.quad = $4.quad;
+		$$.paramTypes = paramTypes;
+		$5.paramTypes.clear();
+		
 	}
     | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' {
 	} ;
