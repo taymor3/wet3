@@ -150,6 +150,9 @@ static int curScopeIntRegsNum = 3; // registers in use of current function
 static int curScopeFloatRegsNum = 3;
 static int curScopeOffset = 0; // Current offset in memory: where to store the next piece of data
 static int prevScopeOffset = 0;  
+
+static vector<string> curParamInsertOrder;
+static vector<string> tmpParamInsertOrder;
 /**********************************************************************************************/
 
 #endif

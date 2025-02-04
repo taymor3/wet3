@@ -86,8 +86,19 @@
 			} ;
 
 	FUNC_ARGLIST : FUNC_ARGLIST ',' DCL {
+				// insert function params to the global list in the reverse order
+				for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
+					string paramName = tmpParamInsertOrder[i];
+					curParamInsertOrder.push_back(paramName);
+				}
+				tmpParamInsertOrder.clear();
 			}
 			| DCL {
+				for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
+					string paramName = tmpParamInsertOrder[i];
+					curParamInsertOrder.push_back(paramName);
+				}
+				tmpParamInsertOrder.clear();
 			} ;
 
 
@@ -97,12 +108,13 @@
 
 	BLK_OPEN : {
 		// open new block
+		// buffer->emit("block start");
 		curBlockDepth++;
 	}
 	;
 
 	BLK_CLOSE : {
-		buffer->emit("block close");
+		// buffer->emit("block end");
 		// delete vars in current scope when leaving it
 		for(std::map<string, Symbol>::iterator it = symbolTable.begin(); it != symbolTable.end(); ++it){
 			if (it->second.depth == curBlockDepth) {
@@ -116,10 +128,91 @@
 		curBlockDepth--;
 	}
 
-	DCL :   tk_id ':' TYPE {
+	DCL : tk_id ':' TYPE {
+			if ($3.type == void_t) {
+				printSemanticError("variables can't be of type void");
 			}
-			| tk_id ',' DCL {
-			} ;
+			// check that this id does not colide with currrent function parameters
+			if (find(curParamInsertOrder.begin(), curParamInsertOrder.end(),
+				$1.name) != curParamInsertOrder.end()) {
+				printSemanticError("redefinition of parameter '" + $1.name + "'");
+			}
+
+			prevScopeOffset = curScopeOffset;
+			$$.name = $1.name;
+			$$.type = $3.type;
+			$$.offset = curScopeOffset;
+
+			if( symbolTable.find($1.name) == symbolTable.end()) { 
+				// symbol not defined yet
+				Symbol s;
+				s.depth = curBlockDepth;
+				s.type[s.depth] = $3.type;
+
+				s.offset[curBlockDepth] = curScopeOffset;
+				curScopeOffset += 4;
+
+				// save to symbol table
+				symbolTable.insert(std::pair<string, Symbol>($1.name, s));
+				// save to list for function calls
+				tmpParamInsertOrder.push_back($1.name);
+			} else { // symbol already defined somewhere
+				// symbol already defined in same block
+				if(symbolTable[$1.name].type.size() == curBlockDepth) {
+					printSemanticError("redeclaration of identifier '" + $1.name + "'");
+				}
+				// add id to current block depth
+				symbolTable[$1.name].depth = curBlockDepth;
+				symbolTable[$1.name].type[curBlockDepth] = $3.type;
+				symbolTable[$1.name].offset[curBlockDepth] = curScopeOffset;
+				curScopeOffset += 4;
+			}
+		}
+		| tk_id ',' DCL {
+			if ($3.type == void_t) {
+				printSemanticError("variables can't be of type void");
+			}
+			// check that this id does not colide with currrent function parameters
+			if (find(curParamInsertOrder.begin(), curParamInsertOrder.end(),
+				$1.name) != curParamInsertOrder.end()) {
+				printSemanticError("redefinition of parameter '" + $1.name + "'");
+			}
+			// check in tmp also because its not first param
+			if (find(tmpParamInsertOrder.begin(), tmpParamInsertOrder.end(),
+				$1.name) != tmpParamInsertOrder.end()) {
+				printSemanticError("redefinition of parameter '" + $1.name + "'");
+			}
+
+			// prevScopeOffset = curScopeOffset;
+			$$.name = $1.name;
+			$$.type = $3.type;
+			// $$.offset = curScopeOffset;
+
+			if(symbolTable.find($1.name) == symbolTable.end()) { 
+				// symbol not defined yet
+				Symbol s;
+				s.depth = curBlockDepth;
+				s.type[s.depth] = $3.type;
+
+				s.offset[curBlockDepth] = curScopeOffset;
+				curScopeOffset += 4;
+
+				// save to symbol table
+				symbolTable.insert(std::pair<string, Symbol>($1.name, s));
+				// save to list for function calls
+				tmpParamInsertOrder.push_back($1.name);
+			} else { // symbol already defined somewhere
+				// symbol already defined in same block
+				if(symbolTable[$1.name].type.size() == curBlockDepth) {
+					printSemanticError("redeclaration of identifier '" + $1.name + "'");
+				}
+				// add id to current block depth
+				symbolTable[$1.name].depth = curBlockDepth;
+				symbolTable[$1.name].type[curBlockDepth] = $3.type;
+				symbolTable[$1.name].offset[curBlockDepth] = curScopeOffset;
+				curScopeOffset += 4;
+			}
+		} ;
 
 	TYPE :  tk_int {
 				$$.type = int_
@@ -131,27 +224,30 @@
 				$$.type = void_t
 			} ;
 
-	STLIST :STLIST STMT {
-			}
-			| /* e */ {
-			} ;
+	STLIST :STLIST STMT { }
+			| /* e */ { } ;
 
 	STMT :  DCL ';' {
+				// bring stack pointer up based on old offset
+				tmpParamInsertOrder.clear();
+				curParamInsertOrder.clear();
+				int byteOffset = curScopeOffset - prevScopeOffset;
+				buffer->emit("ADD2I I2 I2 " + intToString(byteOffset));
 			}
-			| ASSN {
-			}
+			| ASSN { }
 			| EXP ';' {
+				if ($1.type != void_t) { // check if needed !!!
+					printSemanticError("expression has incompatible type");
+				}
 			}
-			| CNTRL {
+			| CNTRL M {
+				// backpatch the nextlist of last ctrl block
+				buffer->backpatch($1.nextList, $2.quad);
 			}
-			| READ {
-			}
-			| WRITE {
-			} 
-			| RETURN {
-			}
-			| BLK {
-			} ;
+			| READ { }
+			| WRITE { } 
+			| RETURN { }
+			| BLK { } ;
 
 	RETURN : tk_return EXP ';' {
 		if (curRetType != $2.type or curRetType == void_t) {
@@ -276,10 +372,10 @@
 
 
 	EXP : EXP tk_addop EXP {
-			if ($1.type != $2.type) {
-				printSemanticError("MUL requires same type arguments");
+			if ($1.type != $3.type) {
+				printSemanticError("ADD ops require same type arguments");
 			} else if ($1.type == void_t) {
-				printSemanticError("can't preform arithmatic on void_t");
+				printSemanticError("can't perform arithmatic on void_t");
 			}
 
 			int leftReg = $1.RegNum;
@@ -295,10 +391,10 @@
 			}
 		}
 		| EXP tk_mulop EXP {
-			if ($1.type != $2.type) {
+			if ($1.type != $3.type) {
 				printSemanticError("MUL ops require same type arguments");
 			} else if ($1.type == void_t) {
-				printSemanticError("can't preform arithmatic on void_t");
+				printSemanticError("can't perform arithmatic on void_t");
 			}
 
 			int leftReg = $1.RegNum;
