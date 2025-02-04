@@ -330,7 +330,13 @@
 			printSemanticError("wrong return type given");
 		}
 		$$.RegNum = $2.RegNum;
-		buffer->emit("STORI I" + intToString($$.RegNum) + " I1 -4");
+		if ($2.type == float_) {
+			buffer->emit("CITOF F1 I1");
+			buffer->emit("STORF F" + intToString($$.RegNum) + " F1 -4");
+		} else {
+			buffer->emit("STORI I" + intToString($$.RegNum) + " I1 -4");
+		}
+		
 		buffer->emit("RETRN");
 	}
 	| tk_return ';' {
