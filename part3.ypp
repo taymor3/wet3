@@ -36,8 +36,7 @@
 	%%
 
 	PROGRAM : FDEFS {
- 		buffer->emit("HALT");
-		// backpatch all the holes of JLINK	
+		// backpatch all the holes created by JLINK	
 		for(map<string, Function>::iterator it = functionTable.begin();
 			it != functionTable.end(); it++) {
 			buffer->backpatch(it->second.callingLines, 
@@ -45,25 +44,45 @@
 		}
 	} ;
 
-	FDEFS : FDEFS FUNC_DEF_API BLK {
-			}
-			| FDEFS FUNC_DEC_API {
-			}
-			| /* e */ {
-            } ;
+	FDEFS : FDEFS FUNC_DEF_API BLK M { // function definition
+		// check if function is already defined
+		if(functionTable[$2.name].isDefined != false) {
+			printSemanticError("redefinition of function '" + $2.name + "'");
+		}
+		else { // save that a function with this name has been defined
+			functionTable[$2.name].isDefined = true; 
+		}
+		buffer->emit("RETRN");
+
+		// set globals 
+		curScopeIntRegsNum = 3;
+		curScopeFloatRegsNum = 3;
+		curScopeOffset = 0;
+		symbolTable.clear(); // ???
+		$2.paramTypes.clear();
+	}
+	| FDEFS FUNC_DEC_API { // function declaration
+		// if not defined yet, assume in another file
+		if (functionTable[$2.name].isDefined != true) {
+			functionTable[$2.name].startLineImplementation = -1;
+		}
+		symbolTable.clear(); // ???
+	}
+	| /* e */ {
+    } ;
 
 	FUNC_DEC_API : TYPE tk_id '(' ')' ';' {
 			}
-            | TYPE tk_id '(' FUNC_ARGLIST ')' ';' {
+            | TYPE tk_id '(' M FUNC_ARGLIST ')' ';' {
 			}
-            | TYPE tk_id '(' FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
+            | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
 			} ;
     
     FUNC_DEF_API : TYPE tk_id '(' ')' {
 			}
-            | TYPE tk_id '(' FUNC_ARGLIST ')' {
+            | TYPE tk_id '(' M FUNC_ARGLIST ')' {
 			}
-            | TYPE tk_id '(' FUNC_ARGLIST ',' tk_ellipsis ')' {
+            | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' {
 			} ;
 
 	FUNC_ARGLIST : FUNC_ARGLIST ',' DCL {
@@ -73,7 +92,8 @@
 
 
 	BLK :   '{' BLK_OPEN STLIST M BLK_CLOSE '}' {
-			} ;
+		buffer->backpatch($3.nextList, $4.quad);
+	} ;
 
 	BLK_OPEN : {
 		// open new block
@@ -102,11 +122,13 @@
 			} ;
 
 	TYPE :  tk_int {
+				$$.type = int_
 			}
-            | tk_float
-			{
+            | tk_float {
+				$$.type = float_
 			}
             | tk_void {
+				$$.type = void_t
 			} ;
 
 	STLIST :STLIST STMT {
@@ -131,14 +153,50 @@
 			| BLK {
 			} ;
 
-	RETURN :tk_return EXP ';' {
-			}
-			| tk_return ';' {
-			} ;
+	RETURN : tk_return EXP ';' {
+		if (curRetType != $2.type or curRetType == void_t) {
+			printSemanticError("wrong return type given");
+		}
+		$$.RegNum = $2.RegNum;
+		buffer->emit("STORI I" + intToString($$.RegNum) + " I1 -4");
+		buffer->emit("RETRN");
+	}
+	| tk_return ';' {
+		if (curRetType != void_t) {
+			printSemanticError("return value is not void but nothing is given");
+		}
+		// set I0 to return address
+		// buffer->emit("LOADI I0 I2 4"); dont know if needed
+		buffer->emit("RETRN");
+	} ;
 
 	WRITE : tk_write '(' EXP ')' ';' {
+		if ($3.type == int_) { // ########### not sure works
+			buffer->emit("PRNTI I" + intToString($3.RegNum));
+		} else if ($3.type == float_) {
+			buffer->emit("PRNTF F" + intToString($3.RegNum));
+		}
 			}
 			| tk_write '(' tk_str ')' ';' {
+				cout << $3.name << endl;
+				for (unsigned int i = 0 ; i < $3.name.length() ; i++) {
+				char c = $3.name[i];
+				if (c == '\\') {
+					if ($3.name[i+1] == 'n') {
+						c = '\n';
+						i++;
+					}
+					else if ($3.name[i+1] == 't') {
+						c = '\t';
+						i++;
+					} else if ($3.name[i+1] == '"') {
+						c = '"';
+						i++;
+					}
+				}
+				int val = static_cast<int>(c);
+				buffer->emit("PRNTC " + intToString(val));
+		}
 			} ;
 
 	READ :  tk_read '(' LVAL ')' ';'	{
@@ -148,56 +206,232 @@
 	ASSN :  LVAL tk_assign EXP ';' {
 			} ;
 
-	LVAL :  tk_id {
+	LVAL :  tk_id { // needs to be done still
+		// check if variable exists
+		if (symbolTable.find($1.name) == symbolTable.end()) {
+			printSemanticError("use of undeclared identifier '" + $1.name + "'");
+		}
+		int depth = symbolTable[$1.name].depth;
+		$$.type = symbolTable[$1.name].type[depth];
+		
+		if ($$.type == void_t) {
+			printSemanticError("variable '" + $1.name + "' has incompatible type (void)");
+		}
+
+		// Allocate a register for the memory offset calulation
+		// dont know why this is here ********
+		// $$.RegNum = curScopeRegsNum++; 
+		$$.offset = symbolTable[$1.name].offset[depth];
+		buffer->emit("ADD2I I" + intToString($$.RegNum) + " I1 " + intToString($$.offset));
+	} ;
+
+	CNTRL : tk_if BEXP tk_then M STMT tk_else N M STMT {
+				buffer->backpatch($2.trueList, $4.quad);
+				buffer->backpatch($2.falseList, $8.quad);
+				$$.nextList = merge<int>($5.nextList, $7.nextList);
+				$$.nextList = merge<int>($$.nextList, $9.nextList);
+				$5.nextList.clear();
+				$9.nextList.clear();
+				$7.nextList.clear();
+			}
+			| tk_if BEXP tk_then M STMT {
+				buffer->backpatch($2.trueList, $4.quad);
+				$$.nextList = merge<int>($2.falseList, $5.nextList);
+				$2.falseList.clear();
+				$5.nextList.clear();
+			}
+			| tk_while M BEXP tk_do M STMT {
+				buffer->backpatch($3.trueList, $5.quad);
+				buffer->backpatch($6.nextList, $2.quad);
+				$$.nextList = $3.falseList;
+				// UJUMP back to while BEXP
+				// After backpatch the addressed would be filled
+				buffer->emit("UJUMP " + intToString($2.quad));
 			} ;
 
-	CNTRL : tk_if BEXP tk_then STMT tk_else STMT {
+	BEXP :  BEXP tk_or M BEXP {
+				buffer->backpatch($1.falseList, $3.quad);
+				$$.falseList = $4.falseList;
+				$$.trueList = merge<int>($1.trueList, $4.trueList);
+				$1.trueList.clear();
+				$4.trueList.clear();
 			}
-			| tk_if BEXP tk_then STMT {
-			}
-			| tk_while BEXP tk_do STMT {
-			} ;
-
-	BEXP :  BEXP tk_or BEXP {
-			}
-			| BEXP tk_and BEXP {
+			| BEXP tk_and M BEXP {
+				buffer->backpatch($1.trueList, $3.quad);
+				$$.trueList = $4.trueList;
+				$$.falseList = merge<int>($1.falseList, $4.falseList);
+				$1.falseList.clear();
+				$4.falseList.clear();
 			}
 			| tk_not BEXP {
+				$$.trueList = $2.falseList;
+				$$.falseList = $2.trueList;
 			}
 			| EXP tk_relop EXP {
 			}
 			| '(' BEXP ')' {
+				$$.trueList = $2.trueList;
+				$$.falseList = $2.falseList;
             } ;
 
 
-	EXP :   EXP tk_addop EXP {
+	EXP : EXP tk_addop EXP {
+			if ($1.type != $2.type) {
+				printSemanticError("MUL requires same type arguments");
+			} else if ($1.type == void_t) {
+				printSemanticError("can't preform arithmatic on void_t");
 			}
-			| EXP tk_mulop EXP {
-			}
-			| '(' EXP ')' {
-				$$ = $2;
-			}
-			| '(' TYPE ')' EXP {
-			}
-			| tk_id {
-			}
-			| NUM {
-			}
-			| CALL {
-			}
-            | VA_MATERIALISE {
-            } ;
 
-    NUM :   tk_integernum {
+			int leftReg = $1.RegNum;
+			int rightReg = $3.RegNum;
+			string type = ($1.type == float_) ? "F" : "I";
+			
+			if ($2.name == "+") { // ADD
+			buffer->emit("ADD2" + type + " " + type + intToString($$.RegNum) + " " + type + 
+							intToString(leftReg) + " " + type + intToString(rightReg));
+			} else { // SUB
+			buffer->emit("SUBT" + type + " " + type + intToString($$.RegNum) + " " + type + 
+							intToString(leftReg) + " " + type + intToString(rightReg));
 			}
-            | tk_realnum {
-            } ;
+		}
+		| EXP tk_mulop EXP {
+			if ($1.type != $2.type) {
+				printSemanticError("MUL ops require same type arguments");
+			} else if ($1.type == void_t) {
+				printSemanticError("can't preform arithmatic on void_t");
+			}
+
+			int leftReg = $1.RegNum;
+			int rightReg = $3.RegNum;
+			string type = ($1.type == float_) ? "F" : "I";
+			
+			if ($2.name == "*") { // MUL
+			buffer->emit("MULT" + type + " " + type + intToString($$.RegNum) + " " + type + 
+							intToString(leftReg) + " " + type + intToString(rightReg));
+			} else { // DEV
+			buffer->emit("DIVD" + type + " " + type + intToString($$.RegNum) + " " + type + 
+							intToString(leftReg) + " " + type + intToString(rightReg));
+			}
+			
+		}
+		| '(' EXP ')' {
+			$$ = $2;
+		}
+		| '(' TYPE ')' EXP {
+			if ($2.type != void_t && $4.type == void_t) {
+				printSemanticError("can't cast void expressions");
+			}
+
+			if ($2.type == $4.type) {
+				$$ = $4;
+			}
+
+			// float to int
+			if ($2.type == int_ && $4.type == float_) {
+				$$.RegNum = curScopeIntRegsNum++;
+				$$.type = $2.type;
+				$$.offset = $4.offset;
+				buffer->emit("CFTOI I" + intToString($$.RegNum) + " F" + intToString($4.RegNum));
+			}
+			// int to float
+			if ($2.type == float_ && $4.type == int_) {
+				$$.RegNum = curScopeFloatRegsNum++;
+				$$.type = $2.type;
+				$$.offset = $4.offset;
+				buffer->emit("CFTOI F" + intToString($$.RegNum) + " I" + intToString($4.RegNum));
+			}
+		}
+		| tk_id { // check here again
+			// Check that variable is declared
+			if (symbolTable.find($1.name) == symbolTable.end()) {
+				printSemanticError("use of undeclared identifier '" + $1.name + "'");
+			}
+			int depth = symbolTable[$1.name].depth;
+			$$.type = symbolTable[$1.name].type[depth];
+			string type;
+			if ($$.type == int_) {
+				type = "I";
+				$$.RegNum = curScopeIntRegsNum++;
+			} else { // float
+				type = "F";
+				$$.RegNum = curScopeFloatRegsNum++;
+				// make float frame pointer
+				buffer->emit("CITOF F1 I1");
+			}
+				
+			$$.offset = symbolTable[$1.name].offset[depth];
+		
+			buffer->emit("LOAD" + type + " " + type + intToString($$.RegNum) + 
+						 " " + type + "1 " + intToString($$.offset));
+		}
+		| NUM {
+			$$.RegNum = $1.RegNum;
+			$$.type = $1.type;
+		}
+		| CALL {
+			$$.RegNum = $1.RegNum;
+			$$.type = $1.type;
+		}
+        | VA_MATERIALISE { // not done yet
+        } ;
+
+    NUM : tk_integernum {
+		cout << "number: " << $1.name << endl;
+		$$.type = int_;
+		$$.RegNum = curScopeIntRegsNum++;
+		$$.name = $1.name;
+		buffer->emit("COPYI I" + intToString($$.RegNum) + " " + $1.name);
+	}
+    | tk_realnum {
+		cout << "float number: " << $1.name << endl;
+		$$.type = float_;
+		$$.RegNum = curScopeFloatRegsNum++;
+		$$.name = $1.name;
+		buffer->emit("COPYF F" + intToString($$.RegNum) + " " + $1.name);
+	} ;
 
 	CALL : tk_id '(' CALL_ARGS ')' {
-			} ;
+		string func_name = $1.name;
+		
+		// function wasn't declared
+		if(functionTable.find(func_name) == functionTable.end()) {
+			printSemanticError("use of unknown function '" + func_name + "'");
+		}
+
+		Function* cur_func = &functionTable[func_name];
+		// check that number of args matches definition
+		if (cur_func->paramTypes.size() != $3.paramTypes.size()) {
+			printSemanticError("incorrect number of arguments for function '" + func_name + "'");
+		}
+
+		// check that argument types match
+		for (int i = 0; i < cur_func->paramTypes.size(); i++) {
+			if (cur_func->paramTypes[i] != $3.paramTypes[i]) {
+				printSemanticError("incompatible argument types in function '" + func_name + "'");
+			}
+		}
+
+		// save function registers to memory
+		int offset = 0;
+
+		// for (int i = 0; i < curScopeIntRegsNum; ++i) {
+		// 	buffer->emit("STI32 I" + intToString(i) + " I2 " + intToString(offset));
+		// 	offset += 4;
+		// }
+		// for (int i = 0; i < curScopeFloatRegsNum; ++i) {
+		// 	buffer->emit("STI32 I" + intToString(i) + " I2 " + intToString(offset));
+		// 	offset += 4;
+		// }
+
+		// ############################################################
+
+		// 4 bytes for return value
+		offset += 4;
+	} ;
 
     VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')' {
-			} ;
+		// not done yet
+	} ;
 
 	CALL_ARGS : CALL_ARGLIST {
 		$$.paramTypes = $1.paramTypes;	
@@ -229,7 +463,7 @@
 	;
  
 	N : {
-		$$.nextList.push_back(buffer->nextquad());
+		$$.nextList.push_back(buffer->nextQuad());
 		buffer->emit("UJUMP ");
 	}
 	;
@@ -239,7 +473,7 @@
 
 int main(int argc, char* argv[])
 {
-	cout << "start compiling" << endl;
+	cout << "\nstart compiling" << endl;
 	if (argc != 2) {
 		printOperationalError("invalid number of arguments");
 	}
