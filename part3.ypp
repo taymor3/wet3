@@ -289,7 +289,7 @@
 			printSemanticError("return value is not void but nothing is given");
 		}
 		// set I0 to return address
-		// buffer->emit("LOADI I0 I2 4"); dont know if needed
+		buffer->emit("LOADI I0 I2 4");
 		buffer->emit("RETRN");
 	} ;
 
@@ -678,6 +678,28 @@
 			} else { // int
 				buffer->emit("LOADI I" + intToString($$.RegNum) + " I1 -4");
 			}
+		}
+
+		// restore all registers from memory
+		offset = 0;
+		
+		for (int i = 0 ; i < curScopeIntRegsNum ; i++) {
+			if (i == 2) {
+				offset += 4;
+				continue;
+			}
+			buffer->emit("LOADI I" + intToString(i) + " I2 " + intToString(offset));
+			offset += 4;
+		}
+
+		buffer->emit("CITOF F2 I2");
+		for (int i = 0 ; i < curScopeFloatRegsNum ; i++) {
+			if (i == 2) {
+				offset += 4;
+				continue;
+			}
+			buffer->emit("LOADF F" + intToString(i) + " F2 " + intToString(offset));
+			offset += 4;
 		}
 
 		if ($$.type == float_) {
