@@ -88,6 +88,9 @@
 		}
 
 		if (functionTable.find($2.name) != functionTable.end()) { 
+			if ($1.type != functionTable[$2.name].returnType) {
+				printSemanticError("conflicting return type for " + $2.name);
+			}
 			// if already in table, just set implementation line
 			functionTable[$2.name].startLineImplementation = $4.quad;
 		} else {
@@ -108,6 +111,51 @@
 	}
 	| TYPE tk_id '(' M FUNC_ARGLIST ')' {
 		cout << "type id ( args ) " << $2.name << endl;
+		if ($2.name == "main" && $1.type != void_t) {
+			printSemanticError("wrong return type for function main");
+		}
+
+		if (functionTable.find($2.name) != functionTable.end()) { 
+			if ($1.type != functionTable[$2.name].returnType) {
+				printSemanticError("conflicting return type for " + $2.name);
+			}
+			// if already in table, just set implementation line
+			functionTable[$2.name].startLineImplementation = $4.quad;
+		} else {
+			// else, insert to function table
+			Function new_func;
+			new_func.returnType = $1.type;
+			new_func.startLineImplementation = $4.quad;
+			new_func.paramTypes = $5.paramTypes;
+			new_func.isDefined = false;
+
+			// insert into function table
+			functionTable.insert(std::pair<string,Function>($2.name, new_func));
+		}
+
+		curRetType = $1.type;
+		$$.name = $2.name;
+		$$.type = $1.type;
+		$$.quad = $4.quad;
+		$$.paramTypes = $5.paramTypes;
+		$5.paramTypes.clear();
+		
+		// calculate param offsets from I1 in reverse
+		// save 4 bytes for function return val
+		int offset = -4;
+		vector<Type> paramTypes;
+
+		for (int i = 0; i < curParamInsertOrder.size(); i++) {
+			string param_name = curParamInsertOrder[i];
+			Type param_type = symbolTable[param_name].type[0];
+			paramTypes.push_back(param_type);
+			offset -= 4;
+			symbolTable[param_name].offset[0] = offset;
+		}
+
+		$$.paramTypes = paramTypes;
+		curParamInsertOrder.clear();
+		curScopeOffset = curScopeOffset + offset + 4;
 	}
     | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' {
 	} ;
