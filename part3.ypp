@@ -83,7 +83,6 @@
     } ;
 
 	FUNC_DEC_API : TYPE tk_id '(' M ')' ';' {
-		cout << "type id (); " << $2.name << endl;
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
@@ -111,7 +110,6 @@
 		$$.quad = $4.quad;
 	}
     | TYPE tk_id '(' M FUNC_ARGLIST ')' ';' {
-		cout << "type id ( args ); " << $2.name << endl;
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
@@ -165,7 +163,6 @@
 		$5.paramTypes.clear();
 	}
 	| TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
-		cout << "type id ( args , ...); " << $2.name << endl;
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
@@ -220,7 +217,6 @@
 	} ;
     
     FUNC_DEF_API : TYPE tk_id '(' M ')' {
-		cout << "type id () " << $2.name << endl;
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
@@ -252,7 +248,6 @@
 		$$.quad = $4.quad;
 	}
 	| TYPE tk_id '(' M FUNC_ARGLIST ')' {
-		cout << "type id ( args ) " << $2.name << endl;
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
@@ -310,7 +305,6 @@
 		
 	}
     | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' {
-		cout << "type id ( args , ...) " << $2.name << endl;
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
@@ -375,7 +369,6 @@
 			curParamInsertOrder.push_back(paramName);
 		}
 		tmpParamInsertOrder.clear();
-		cout << "func arglist dcl param size:" << curParamInsertOrder.size() << endl;
 	}
 	| DCL {
 		for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
@@ -383,7 +376,6 @@
 			curParamInsertOrder.push_back(paramName);
 		}
 		tmpParamInsertOrder.clear();
-		cout << "dcl param size:" << curParamInsertOrder.size() << endl;
 	} ;
 
 
@@ -563,7 +555,6 @@
 		}
 			}
 			| tk_write '(' tk_str ')' ';' {
-				cout << $3.name << endl;
 				printRuntimeString($3.name);
 			} ;
 
@@ -601,8 +592,7 @@
 
 	} ;
 
-	LVAL : tk_id { // needs to be done still
-		cout << "LVAL name: " << $1.name << endl;
+	LVAL : tk_id {
 		// check if symbol exists
 		if (symbolTable.find($1.name) == symbolTable.end()) {
 			printSemanticError("use of undeclared symbol " + $1.name);
@@ -871,14 +861,12 @@
         } ;
 
     NUM : tk_integernum {
-		cout << "number: " << $1.name << endl;
 		$$.type = int_;
 		$$.RegNum = curScopeIntRegsNum++;
 		$$.name = $1.name;
 		buffer->emit("COPYI I" + intToString($$.RegNum) + " " + $1.name);
 	}
     | tk_realnum {
-		cout << "float number: " << $1.name << endl;
 		$$.type = float_;
 		$$.RegNum = curScopeFloatRegsNum++;
 		$$.name = $1.name;
@@ -1011,7 +999,7 @@
 
     VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')' {
 		$$.type = $3.type;
-		
+
 	} ;
 
 	CALL_ARGS : CALL_ARGLIST {
@@ -1054,7 +1042,6 @@
 
 int main(int argc, char* argv[])
 {
-	cout << "\nstart compiling" << endl;
 	if (argc != 2) {
 		printOperationalError("invalid number of arguments");
 	}
@@ -1111,7 +1098,6 @@ int main(int argc, char* argv[])
 	output_rsk.close();
 
 	yylex_destroy();
-	cout << "stop compiling" << endl;
 	return 0;
 }
 
