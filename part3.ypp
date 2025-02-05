@@ -67,7 +67,7 @@
 		if (functionTable[$2.name].isDefined != true) {
 			functionTable[$2.name].startLineImplementation = -1;
 		}
-		// symbolTable.clear();
+		symbolTable.clear();
 	}
 	| /* e */ {
     } ;
@@ -128,11 +128,11 @@
 			if ($1.type != functionTable[$2.name].returnType) {
 				printSemanticError("wrong return type for " + $2.name);
 			}
-			if ($5.paramTypes.size() != functionTable[$2.name].paramTypes.size()) {
+			if (paramTypes.size() != functionTable[$2.name].paramTypes.size()) {
 				printSemanticError("mismatched amount of arguments for " + $2.name);
 			}
 			for (int i = 0; i < functionTable[$2.name].paramTypes.size(); i++) {
-				if (functionTable[$2.name].paramTypes[i] != $5.paramTypes[i]) {
+				if (functionTable[$2.name].paramTypes[i] != paramTypes[i]) {
 					printSemanticError("mismatched types for " + $2.name);
 				}
 			}
@@ -251,12 +251,14 @@
 	} ;
 
 	FUNC_ARGLIST : FUNC_ARGLIST ',' DCL {
+		
 		// insert function params to the global list in the reverse order
 		for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
 			string paramName = tmpParamInsertOrder[i];
 			curParamInsertOrder.push_back(paramName);
 		}
 		tmpParamInsertOrder.clear();
+		cout << "func arglist dcl param size:" << curParamInsertOrder.size() << endl;
 	}
 	| DCL {
 		for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
@@ -264,6 +266,7 @@
 			curParamInsertOrder.push_back(paramName);
 		}
 		tmpParamInsertOrder.clear();
+		cout << "dcl param size:" << curParamInsertOrder.size() << endl;
 	} ;
 
 
@@ -348,10 +351,10 @@
 				printSemanticError("redefinition of parameter '" + $1.name + "'");
 			}
 
-			// prevScopeOffset = curScopeOffset;
+			prevScopeOffset = curScopeOffset;
 			$$.name = $1.name;
 			$$.type = $3.type;
-			// $$.offset = curScopeOffset;
+			$$.offset = curScopeOffset;
 
 			if(symbolTable.find($1.name) == symbolTable.end()) { 
 				// symbol not defined yet
