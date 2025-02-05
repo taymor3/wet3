@@ -121,7 +121,7 @@
 
 		$$.paramTypes = paramTypes;
 		curParamInsertOrder.clear();
-		curScopeOffset = curScopeOffset + offset + 4; // ????
+		curScopeOffset = curScopeOffset + offset + 4;
 
 		if (functionTable.find($2.name) != functionTable.end()) { 
 			// if already in function table, check that it matches previous declaration
@@ -343,18 +343,16 @@
 			// check that this id does not colide with currrent function parameters
 			if (find(curParamInsertOrder.begin(), curParamInsertOrder.end(),
 				$1.name) != curParamInsertOrder.end()) {
-				printSemanticError("redefinition of parameter '" + $1.name + "'");
+				printSemanticError("redefinition of parameter " + $1.name);
 			}
 			// check in tmp also because its not first param
 			if (find(tmpParamInsertOrder.begin(), tmpParamInsertOrder.end(),
 				$1.name) != tmpParamInsertOrder.end()) {
-				printSemanticError("redefinition of parameter '" + $1.name + "'");
+				printSemanticError("redefinition of parameter " + $1.name);
 			}
 
-			prevScopeOffset = curScopeOffset;
 			$$.name = $1.name;
 			$$.type = $3.type;
-			$$.offset = curScopeOffset;
 
 			if(symbolTable.find($1.name) == symbolTable.end()) { 
 				// symbol not defined yet
