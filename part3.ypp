@@ -114,6 +114,10 @@
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
+		// compare declared and defined return types
+		if ($1.type != functionTable[$2.name].returnType) {
+			printSemanticError("wrong return type for " + $2.name);
+		}
 
 		// calculate param offsets from I1 in reverse
 		// save 4 bytes for function return val
@@ -474,6 +478,7 @@
 					printSemanticError("can't perform RELOP ops on void_t");
 				}
 				string type;
+				int temp_reg;
 				if ($1.type == int_) {
 					type = "I";
 					$$.RegNum = curScopeIntRegsNum++;
@@ -486,40 +491,70 @@
 				$$.falseList.push_back(buffer->nextQuad() + 1);
 				// alocate quad for BNEQZ 
 				$$.trueList.push_back(buffer->nextQuad() + 2);
-
+				int cur_reg = $$.RegNum;
 				if ($2.name == "==") {
-					buffer->emit("SEQU" + type + " " + type + intToString($$.RegNum) + " " 
+					buffer->emit("SEQU" + type + " " + type + intToString(cur_reg) + " " 
 					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
-					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+					if (type == "F") { // convert result back to int
+						type = "I";
+						cur_reg = curScopeIntRegsNum++;
+						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
+					}
+					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
 				} 
 				else if ($2.name == "<>") {
-					buffer->emit("SNEQ" + type + " " + type + intToString($$.RegNum) + " " 
+					buffer->emit("SNEQ" + type + " " + type + intToString(cur_reg) + " " 
 					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
-					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+					if (type == "F") { // convert result back to int
+						type = "I";
+						cur_reg = curScopeIntRegsNum++;
+						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
+					}
+					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
 				} 
 				else if ($2.name == ">=") {
-					buffer->emit("SLET" + type + " " + type + intToString($$.RegNum) + " " 
+					buffer->emit("SLET" + type + " " + type + intToString(cur_reg) + " " 
 					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
-					buffer->emit("BNEQZ " + type + intToString($$.RegNum) + " ");
+					if (type == "F") { // convert result back to int
+						type = "I";
+						cur_reg = curScopeIntRegsNum++;
+						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
+					}
+					buffer->emit("BNEQZ " + type + intToString(cur_reg) + " ");
 				}
 				else if ($2.name == ">") {
-					buffer->emit("SGRT" + type + " " + type + intToString($$.RegNum) + " " 
+					buffer->emit("SGRT" + type + " " + type + intToString(cur_reg) + " " 
 					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
-					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+					if (type == "F") { // convert result back to int
+						type = "I";
+						cur_reg = curScopeIntRegsNum++;
+						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
+					}
+					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
 				} 
 				else if ($2.name == "<=") {
-					buffer->emit("SGRT" + type + " " + type + intToString($$.RegNum) + " " 
+					buffer->emit("SGRT" + type + " " + type + intToString(cur_reg) + " " 
 					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
-					buffer->emit("BNEQZ " + type + intToString($$.RegNum) + " ");
+					if (type == "F") { // convert result back to int
+						type = "I";
+						cur_reg = curScopeIntRegsNum++;
+						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
+					}
+					buffer->emit("BNEQZ " + type + intToString(cur_reg) + " ");
 				}
 				else if ($2.name == "<") {
-					buffer->emit("SLET" + type + " " + type + intToString($$.RegNum) + " " 
+					buffer->emit("SLET" + type + " " + type + intToString(cur_reg) + " " 
 					+ type + intToString(leftReg) + " " + type + intToString(rightReg));
-					buffer->emit("BREQZ " + type + intToString($$.RegNum) + " ");
+					if (type == "F") { // convert result back to int
+						type = "I";
+						cur_reg = curScopeIntRegsNum++;
+						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
+					}
+					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
 				}
 
 				buffer->emit("UJUMP ");
-				
+				$$.RegNum = cur_reg;
 			}
 			| '(' BEXP ')' {
 				$$.trueList = $2.trueList;
