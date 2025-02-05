@@ -67,16 +67,92 @@
 		if (functionTable[$2.name].isDefined != true) {
 			functionTable[$2.name].startLineImplementation = -1;
 		}
-		symbolTable.clear();
+		// symbolTable.clear();
 	}
 	| /* e */ {
     } ;
 
 	FUNC_DEC_API : TYPE tk_id '(' M ')' ';' {
 		cout << "type id (); " << $2.name << endl;
+		if ($2.name == "main" && $1.type != void_t) {
+			printSemanticError("wrong return type for function main");
+		}
+
+		if (functionTable.find($2.name) != functionTable.end()) { 
+			// if already in function table, check that it matches previous declaration
+			if ($1.type != functionTable[$2.name].returnType) {
+				printSemanticError("wrong return type for " + $2.name);
+			}
+			if (functionTable[$2.name].paramTypes.size() != 0) {
+				printSemanticError("mismatched amount of arguments for " + $2.name);
+			}
+		} else {
+			// else, insert to function table
+			Function new_func;
+			new_func.returnType = $1.type;
+			new_func.isDefined = false;
+			// insert into function table
+			functionTable.insert(std::pair<string,Function>($2.name, new_func));
+		}
+
+		// curRetType = $1.type;
+		$$.name = $2.name;
+		$$.type = $1.type;
+		$$.quad = $4.quad;
 	}
     | TYPE tk_id '(' M FUNC_ARGLIST ')' ';' {
 		cout << "type id ( args ); " << $2.name << endl;
+		if ($2.name == "main" && $1.type != void_t) {
+			printSemanticError("wrong return type for function main");
+		}
+
+		// calculate param offsets from I1 in reverse
+		// save 4 bytes for function return val
+		int offset = -4;
+		vector<Type> paramTypes;
+
+		for (int i = 0; i < curParamInsertOrder.size(); i++) {
+			string param_name = curParamInsertOrder[i];
+			Type param_type = symbolTable[param_name].type[0];
+			paramTypes.push_back(param_type);
+			offset -= 4;
+			symbolTable[param_name].offset[0] = offset;
+		}
+
+		$$.paramTypes = paramTypes;
+		curParamInsertOrder.clear();
+		curScopeOffset = curScopeOffset + offset + 4; // ????
+
+		if (functionTable.find($2.name) != functionTable.end()) { 
+			// if already in function table, check that it matches previous declaration
+			if ($1.type != functionTable[$2.name].returnType) {
+				printSemanticError("wrong return type for " + $2.name);
+			}
+			if ($5.paramTypes.size() != functionTable[$2.name].paramTypes.size()) {
+				printSemanticError("mismatched amount of arguments for " + $2.name);
+			}
+			for (int i = 0; i < functionTable[$2.name].paramTypes.size(); i++) {
+				if (functionTable[$2.name].paramTypes[i] != $5.paramTypes[i]) {
+					printSemanticError("mismatched types for " + $2.name);
+				}
+			}
+		} else {
+			// else, insert to function table
+			Function new_func;
+			new_func.returnType = $1.type;
+			new_func.paramTypes = paramTypes;
+			new_func.isDefined = false;
+
+			// insert into function table
+			functionTable.insert(std::pair<string,Function>($2.name, new_func));
+		}
+
+		curRetType = $1.type;
+		$$.name = $2.name;
+		$$.type = $1.type;
+		$$.quad = $4.quad;
+		$$.paramTypes = paramTypes;
+		$5.paramTypes.clear();
 	}
 	| TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
 	} ;
@@ -88,8 +164,12 @@
 		}
 
 		if (functionTable.find($2.name) != functionTable.end()) { 
+			// if already in function table, check that it matches previous declaration
 			if ($1.type != functionTable[$2.name].returnType) {
 				printSemanticError("wrong return type for " + $2.name);
+			}
+			if (functionTable[$2.name].paramTypes.size() != 0) {
+				printSemanticError("mismatched amount of arguments for " + $2.name);
 			}
 			// if already in table, just set implementation line
 			functionTable[$2.name].startLineImplementation = $4.quad;
@@ -114,10 +194,6 @@
 		if ($2.name == "main" && $1.type != void_t) {
 			printSemanticError("wrong return type for function main");
 		}
-		// compare declared and defined return types
-		if ($1.type != functionTable[$2.name].returnType) {
-			printSemanticError("wrong return type for " + $2.name);
-		}
 
 		// calculate param offsets from I1 in reverse
 		// save 4 bytes for function return val
@@ -137,8 +213,17 @@
 		curScopeOffset = curScopeOffset + offset + 4;
 
 		if (functionTable.find($2.name) != functionTable.end()) { 
+			// if already in function table, check that it matches previous declaration
 			if ($1.type != functionTable[$2.name].returnType) {
 				printSemanticError("wrong return type for " + $2.name);
+			}
+			if ($5.paramTypes.size() != functionTable[$2.name].paramTypes.size()) {
+				printSemanticError("mismatched amount of arguments for " + $2.name);
+			}
+			for (int i = 0; i < functionTable[$2.name].paramTypes.size(); i++) {
+				if (functionTable[$2.name].paramTypes[i] != $5.paramTypes[i]) {
+					printSemanticError("mismatched types for " + $2.name);
+				}
 			}
 			// if already in table, just set implementation line
 			functionTable[$2.name].startLineImplementation = $4.quad;
@@ -166,20 +251,20 @@
 	} ;
 
 	FUNC_ARGLIST : FUNC_ARGLIST ',' DCL {
-				// insert function params to the global list in the reverse order
-				for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
-					string paramName = tmpParamInsertOrder[i];
-					curParamInsertOrder.push_back(paramName);
-				}
-				tmpParamInsertOrder.clear();
-			}
-			| DCL {
-				for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
-					string paramName = tmpParamInsertOrder[i];
-					curParamInsertOrder.push_back(paramName);
-				}
-				tmpParamInsertOrder.clear();
-			} ;
+		// insert function params to the global list in the reverse order
+		for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
+			string paramName = tmpParamInsertOrder[i];
+			curParamInsertOrder.push_back(paramName);
+		}
+		tmpParamInsertOrder.clear();
+	}
+	| DCL {
+		for(int i=tmpParamInsertOrder.size()-1; i>=0; i--) {
+			string paramName = tmpParamInsertOrder[i];
+			curParamInsertOrder.push_back(paramName);
+		}
+		tmpParamInsertOrder.clear();
+	} ;
 
 
 	BLK :   '{' BLK_OPEN STLIST M BLK_CLOSE '}' {
@@ -487,11 +572,7 @@
 					$$.RegNum = curScopeFloatRegsNum++;
 				}
 				// if the type is float we will need one more quad
-				int holes_offset = (type == "F") ? 2 : 1; 
-				// alocate quad for UJUMP
-				$$.falseList.push_back(buffer->nextQuad() + holes_offset);
-				// alocate quad for BNEQZ 
-				$$.trueList.push_back(buffer->nextQuad() + holes_offset + 1); 
+				int holes_offset = 1;  
 				
 				int cur_reg = $$.RegNum;
 				if ($2.name == "==") {
@@ -510,6 +591,7 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
+						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
@@ -520,6 +602,7 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
+						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BNEQZ " + type + intToString(cur_reg) + " ");
@@ -530,6 +613,7 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
+						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
@@ -540,6 +624,7 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
+						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BNEQZ " + type + intToString(cur_reg) + " ");
@@ -554,6 +639,11 @@
 					}
 					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
 				}
+				
+				// alocate quad for UJUMP
+				$$.falseList.push_back(buffer->nextQuad() + holes_offset);
+				// alocate quad for BNEQZ 
+				$$.trueList.push_back(buffer->nextQuad() + holes_offset);
 
 				buffer->emit("UJUMP ");
 				$$.RegNum = cur_reg;
