@@ -34,11 +34,6 @@ or           "||"
 not          "!"
 comment      "#"[^\n]*
 
-
-/* va_arg {
-	return tk_va_arg;
-} */
-
 /* rules */
 %%
 
@@ -84,6 +79,10 @@ else {
 
 return {
 	return tk_return;
+}
+
+va_arg {
+	return tk_va_arg;
 }
 
 {symbol} {

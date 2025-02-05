@@ -27,17 +27,27 @@
     %token tk_while tk_do tk_return
     %token tk_va_arg
 
-    %left tk_relop tk_addop tk_mulop
-	%right tk_assign tk_not
+	// lowest prio
+	%left '{' '}'
+	%left ':'
+	%left ';'
+	%left ','
+	%left tk_ellipsis
+	%right tk_assign 
 	%right tk_if tk_then tk_else
-    
-	%left '(' ')' '{' '}' ':' ';'
-    %left tk_or tk_and
+	%left tk_or
+	%left tk_and
+	%left tk_relop
+	%left tk_addop
+	%left tk_mulop
+    %right tk_not
+	%left '(' ')'
+	// highest prio
 
 	%%
 
 	PROGRAM : FDEFS {
-		// backpatch all the holes created by JLINK	
+		// backpatch holes created by JLINK	
 		for(map<string, Function>::iterator it = functionTable.begin();
 			it != functionTable.end(); it++) {
 			buffer->backpatch(it->second.callingLines, 

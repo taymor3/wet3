@@ -1,12 +1,14 @@
-# Testing runtime error
-float test(a, b:int) {
-    return a / b; 
+int test(i:int) {
+    return va_arg(int, i);
 }
 
 void main() {
-    a, b:int;
-    a = 5;
-    b = 0;
-    
-    write(test(a, b));
+    index: int;
+    a, b, c:int;
+    a = 2;
+    b = 5;
+    c = 7;
+    read(index);
+
+    write(test(index,a,b,c));
 }

@@ -1,7 +1,7 @@
 # Testing arithmitcal manipluation between real number
 void test (a,b,c:float) {
-    res:floats;
-    res = (a+b) + (b*c*a + (b + 9))/3;
+    res:float;
+    res = (a+b) + (b*c*a + (b + 9.0))/3.0;
 
     write(res);
 }

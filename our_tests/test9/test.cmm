@@ -1,6 +1,5 @@
 # Testing semantic mistake
 int test(a:int) {
-    a : int;
     b : float;
     write(a + b);
 }

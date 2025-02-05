@@ -1,5 +1,5 @@
 # Testing while loop
-void test (startIndex,endIndex:float) {
+void test (startIndex,endIndex:int) {
     # Printing all the numbers from startIndex to endIndex 
 
     while (startIndex < endIndex) do {
@@ -17,5 +17,5 @@ void main() {
      read(startIndex);
      read(endIndex);
 
-     test(startIndex,endIndex,divisableBy);
+     test(startIndex,endIndex);
 }
