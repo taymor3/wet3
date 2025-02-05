@@ -412,7 +412,7 @@
 			// check that this id does not colide with currrent function parameters
 			if (find(curParamInsertOrder.begin(), curParamInsertOrder.end(),
 				$1.name) != curParamInsertOrder.end()) {
-				printSemanticError("redefinition of parameter '" + $1.name + "'");
+				printSemanticError("redefinition of parameter " + $1.name);
 			}
 
 			prevScopeOffset = curScopeOffset;
@@ -436,7 +436,7 @@
 			} else { // symbol already defined somewhere
 				// symbol already defined in same block
 				if(symbolTable[$1.name].type.size() == curBlockDepth) {
-					printSemanticError("redeclaration of identifier '" + $1.name + "'");
+					printSemanticError("redeclaration of identifier " + $1.name);
 				}
 				// add id to current block depth
 				symbolTable[$1.name].depth = curBlockDepth;
@@ -479,7 +479,7 @@
 			} else { // symbol already defined somewhere
 				// symbol already defined in same block
 				if(symbolTable[$1.name].type.size() == curBlockDepth) {
-					printSemanticError("redeclaration of identifier '" + $1.name + "'");
+					printSemanticError("redeclaration of identifier " + $1.name);
 				}
 				// add id to current block depth
 				symbolTable[$1.name].depth = curBlockDepth;
@@ -827,7 +827,7 @@
 		| tk_id {
 			// check that variable is declared
 			if (symbolTable.find($1.name) == symbolTable.end()) {
-				printSemanticError("use of undeclared identifier '" + $1.name + "'");
+				printSemanticError("use of undeclared identifier " + $1.name);
 			}
 			int depth = symbolTable[$1.name].depth;
 			$$.type = symbolTable[$1.name].type[depth];
@@ -878,19 +878,19 @@
 		
 		// function wasn't declared
 		if(functionTable.find(func_name) == functionTable.end()) {
-			printSemanticError("use of unknown function '" + func_name + "'");
+			printSemanticError("use of unknown function " + func_name);
 		}
 
 		Function* cur_func = &functionTable[func_name];
 		// check that number of args matches definition
 		if (cur_func->paramTypes.size() != $3.paramTypes.size()) {
-			printSemanticError("incorrect number of arguments for function '" + func_name + "'");
+			printSemanticError("incorrect number of arguments for function " + func_name );
 		}
 
 		// check that argument types match
 		for (int i = 0; i < cur_func->paramTypes.size(); i++) {
 			if (cur_func->paramTypes[i] != $3.paramTypes[i]) {
-				printSemanticError("incompatible argument types in function '" + func_name + "'");
+				printSemanticError("incompatible argument types in function " + func_name );
 			}
 		}
 
@@ -1049,7 +1049,7 @@ int main(int argc, char* argv[])
 	string input_file = argv[1];
 	size_t last_dot = input_file.find_last_of(".");
     if (input_file.substr(last_dot) != ".cmm") {
-		printOperationalError("invalid file type. expecting '.cmm' extension");
+		printOperationalError("invalid file type, .cmm ending required");
 	}
 
 	extern FILE *yyin;
@@ -1112,7 +1112,7 @@ void printSemanticError (string err) {
 }
 
 void yyerror(char const* s) {
-	cerr << "Syntax error: '" << yytext << "' in line number " << yylineno << endl;
+	cerr << "Syntax error: " << yytext << " in line number " << yylineno << endl;
 	exit(SYNTAX_ERROR);
 }
 
