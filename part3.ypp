@@ -487,7 +487,11 @@
 					$$.RegNum = curScopeFloatRegsNum++;
 				}
 				// if the type is float we will need one more quad
-				int holes_offset = 1;  
+				int holes_offset = (type == "F") ? 2 : 1; 
+				// alocate quad for UJUMP
+				$$.falseList.push_back(buffer->nextQuad() + holes_offset);
+				// alocate quad for BNEQZ 
+				$$.trueList.push_back(buffer->nextQuad() + holes_offset + 1); 
 				
 				int cur_reg = $$.RegNum;
 				if ($2.name == "==") {
@@ -506,7 +510,6 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
-						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
@@ -517,7 +520,6 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
-						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BNEQZ " + type + intToString(cur_reg) + " ");
@@ -528,7 +530,6 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
-						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
@@ -539,7 +540,6 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
-						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BNEQZ " + type + intToString(cur_reg) + " ");
@@ -550,16 +550,10 @@
 					if (type == "F") { // convert result back to int
 						type = "I";
 						cur_reg = curScopeIntRegsNum++;
-						holes_offset++;
 						buffer->emit("CFTOI I" + intToString(cur_reg) + " F" + intToString($$.RegNum));
 					}
 					buffer->emit("BREQZ " + type + intToString(cur_reg) + " ");
 				}
-				
-				// alocate quad for UJUMP
-				$$.falseList.push_back(buffer->nextQuad() + holes_offset);
-				// alocate quad for BNEQZ 
-				$$.trueList.push_back(buffer->nextQuad() + holes_offset);
 
 				buffer->emit("UJUMP ");
 				$$.RegNum = cur_reg;
