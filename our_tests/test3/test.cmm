@@ -1,0 +1,15 @@
+# Testing arithmitcal manipluation between real number
+void test (a,b,c:float) {
+    res:floats;
+    res = (a+b) + (b*c*a + (b + 9))/3;
+
+    write(res);
+}
+
+void main() {
+     a,b,c:float;
+     read(a);
+     read(b);
+     read(c);
+     test(a,b,c);
+}

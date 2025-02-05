@@ -155,6 +155,58 @@
 		$5.paramTypes.clear();
 	}
 	| TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' ';' {
+		cout << "type id ( args , ...); " << $2.name << endl;
+		if ($2.name == "main" && $1.type != void_t) {
+			printSemanticError("wrong return type for function main");
+		}
+
+		// calculate param offsets from I1 in reverse
+		// save 4 bytes for function return val
+		int offset = -4;
+		vector<Type> paramTypes;
+
+		for (int i = 0; i < curParamInsertOrder.size(); i++) {
+			string param_name = curParamInsertOrder[i];
+			Type param_type = symbolTable[param_name].type[0];
+			paramTypes.push_back(param_type);
+			offset -= 4;
+			symbolTable[param_name].offset[0] = offset;
+		}
+
+		$$.paramTypes = paramTypes;
+		curParamInsertOrder.clear();
+		curScopeOffset = curScopeOffset + offset + 4;
+
+		if (functionTable.find($2.name) != functionTable.end()) { 
+			// if already in function table, check that it matches previous declaration
+			if ($1.type != functionTable[$2.name].returnType) {
+				printSemanticError("wrong return type for " + $2.name);
+			}
+			if (paramTypes.size() != functionTable[$2.name].paramTypes.size()) {
+				printSemanticError("mismatched amount of arguments for " + $2.name);
+			}
+			for (int i = 0; i < functionTable[$2.name].paramTypes.size(); i++) {
+				if (functionTable[$2.name].paramTypes[i] != paramTypes[i]) {
+					printSemanticError("mismatched types for " + $2.name);
+				}
+			}
+		} else {
+			// else, insert to function table
+			Function new_func;
+			new_func.returnType = $1.type;
+			new_func.paramTypes = paramTypes;
+			new_func.isDefined = false;
+
+			// insert into function table
+			functionTable.insert(std::pair<string,Function>($2.name, new_func));
+		}
+
+		curRetType = $1.type;
+		$$.name = $2.name;
+		$$.type = $1.type;
+		$$.quad = $4.quad;
+		$$.paramTypes = paramTypes;
+		$5.paramTypes.clear();
 	} ;
     
     FUNC_DEF_API : TYPE tk_id '(' M ')' {
@@ -248,6 +300,61 @@
 		
 	}
     | TYPE tk_id '(' M FUNC_ARGLIST ',' tk_ellipsis ')' {
+		cout << "type id ( args , ...) " << $2.name << endl;
+		if ($2.name == "main" && $1.type != void_t) {
+			printSemanticError("wrong return type for function main");
+		}
+
+		// calculate param offsets from I1 in reverse
+		// save 4 bytes for function return val
+		int offset = -4;
+		vector<Type> paramTypes;
+
+		for (int i = 0; i < curParamInsertOrder.size(); i++) {
+			string param_name = curParamInsertOrder[i];
+			Type param_type = symbolTable[param_name].type[0];
+			paramTypes.push_back(param_type);
+			offset -= 4;
+			symbolTable[param_name].offset[0] = offset;
+		}
+
+		$$.paramTypes = paramTypes;
+		curParamInsertOrder.clear();
+		curScopeOffset = curScopeOffset + offset + 4;
+
+		if (functionTable.find($2.name) != functionTable.end()) { 
+			// if already in function table, check that it matches previous declaration
+			if ($1.type != functionTable[$2.name].returnType) {
+				printSemanticError("wrong return type for " + $2.name);
+			}
+			if ($5.paramTypes.size() != functionTable[$2.name].paramTypes.size()) {
+				printSemanticError("mismatched amount of arguments for " + $2.name);
+			}
+			for (int i = 0; i < functionTable[$2.name].paramTypes.size(); i++) {
+				if (functionTable[$2.name].paramTypes[i] != $5.paramTypes[i]) {
+					printSemanticError("mismatched types for " + $2.name);
+				}
+			}
+			// if already in table, just set implementation line
+			functionTable[$2.name].startLineImplementation = $4.quad;
+		} else {
+			// else, insert to function table
+			Function new_func;
+			new_func.returnType = $1.type;
+			new_func.startLineImplementation = $4.quad;
+			new_func.paramTypes = paramTypes;
+			new_func.isDefined = false;
+
+			// insert into function table
+			functionTable.insert(std::pair<string,Function>($2.name, new_func));
+		}
+
+		curRetType = $1.type;
+		$$.name = $2.name;
+		$$.type = $1.type;
+		$$.quad = $4.quad;
+		$$.paramTypes = paramTypes;
+		$5.paramTypes.clear();
 	} ;
 
 	FUNC_ARGLIST : FUNC_ARGLIST ',' DCL {
@@ -717,8 +824,8 @@
 				buffer->emit("CITOF F" + intToString($$.RegNum) + " I" + intToString($4.RegNum));
 			}
 		}
-		| tk_id { // check here again
-			// Check that variable is declared
+		| tk_id {
+			// check that variable is declared
 			if (symbolTable.find($1.name) == symbolTable.end()) {
 				printSemanticError("use of undeclared identifier '" + $1.name + "'");
 			}
@@ -748,7 +855,9 @@
 			$$.RegNum = $1.RegNum;
 			$$.type = $1.type;
 		}
-        | VA_MATERIALISE { // not done yet
+        | VA_MATERIALISE { 
+			$$.RegNum = $1.RegNum;
+			$$.type = $1.type;
         } ;
 
     NUM : tk_integernum {
@@ -891,7 +1000,8 @@
 	} ;
 
     VA_MATERIALISE : tk_va_arg '(' TYPE ',' EXP ')' {
-		// not done yet
+		$$.type = $3.type;
+		
 	} ;
 
 	CALL_ARGS : CALL_ARGLIST {

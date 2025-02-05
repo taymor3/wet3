@@ -1,0 +1,9 @@
+# Testing write command with strings
+void test(){
+     write("something");
+}
+
+
+void main() {
+     test();
+}

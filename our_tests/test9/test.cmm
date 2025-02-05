@@ -1,0 +1,12 @@
+# Testing semantic mistake
+int test(a:int) {
+    a : int;
+    b : float;
+    write(a + b);
+}
+
+void main() {
+    a:int;
+    a = 5;
+    test(a);
+}

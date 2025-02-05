@@ -1,0 +1,14 @@
+# Testing recurion functions
+int test(int n:int) {
+    if (n == 0) then    
+        return 1;
+
+    return n * factorial(n - 1);
+}
+
+void main() {
+    n:int;
+    read(n);
+
+    write(test(n));
+}

@@ -1,0 +1,15 @@
+# Testing comparison between integers
+void test (a,b:int) {
+    if (a > b ) then
+        write("a > b\n");
+    else 
+        write("a < b\n");
+    
+}
+
+void main() {
+     a,b:int;
+     read(a);
+     read(b);
+     test(a,b);
+}

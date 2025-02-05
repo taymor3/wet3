@@ -1,0 +1,15 @@
+float test(i:int, ...) {
+    return va_arg(float, i);
+}
+
+void main() {
+    index:int;
+    a, b, c:float;
+    
+    read(index);
+    read(a);
+    read(b);
+    read(c);
+
+    write(test(index,a,b,c));
+}

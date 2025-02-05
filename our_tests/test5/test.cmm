@@ -1,0 +1,15 @@
+# Testing comparison between real numbers
+void test (a,b:float) {
+    if (a > b ) then
+        write("a > b\n");
+    else 
+        write("a < b\n");
+    
+}
+
+void main() {
+     a,b:float;
+     read(a);
+     read(b);
+     test(a,b);
+}

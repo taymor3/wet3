@@ -1,0 +1,12 @@
+# Testing runtime error
+float test(a, b:int) {
+    return a / b; 
+}
+
+void main() {
+    a, b:int;
+    a = 5;
+    b = 0;
+    
+    write(test(a, b));
+}

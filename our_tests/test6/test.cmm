@@ -1,0 +1,21 @@
+# Testing while loop
+void test (startIndex,endIndex:float) {
+    # Printing all the numbers from startIndex to endIndex 
+
+    while (startIndex < endIndex) do {
+        write("the number is ");
+        write(startIndex);
+        write("\n");
+        startIndex = startIndex + 1;
+    } 
+    
+}
+
+void main() {
+     startIndex,endIndex:int;
+
+     read(startIndex);
+     read(endIndex);
+
+     test(startIndex,endIndex,divisableBy);
+}
